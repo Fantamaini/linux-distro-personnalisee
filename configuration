@@ -1,0 +1,746 @@
+# Installation et configuration
+
+## Vue d'ensemble
+
+Une fois l'image ISO créée, plusieurs options s'offrent à vous pour l'utiliser :
+
+1. **Live USB** : Utiliser le système sans installation
+2. **Installation complète** : Installer sur disque dur
+3. **Machine virtuelle** : Tester dans un environnement isolé
+4. **PXE Boot** : Déploiement réseau pour plusieurs machines
+
+---
+
+## Création d'une clé USB bootable
+
+### Méthode 1 : Avec `dd` (Linux)
+
+**⚠️ ATTENTION :  Cette commande efface TOUTES les données de la clé USB !**
+
+```bash
+# Identifier la clé USB
+lsblk
+# Exemple de sortie : 
+# sdb           8:16   1  14. 9G  0 disk 
+# └─sdb1        8:17   1  14.9G  0 part /media/usb
+
+# Démonter la clé si elle est montée
+sudo umount /dev/sdb1
+
+# Écrire l'image sur la clé (remplacer /dev/sdb par votre périphérique)
+sudo dd if=live-image-amd64.hybrid.iso of=/dev/sdb bs=4M status=progress oflag=sync
+
+# Attendre la fin (peut prendre 5-15 minutes)
+sync
+
+# Vérifier l'intégrité (optionnel)
+sudo dd if=/dev/sdb bs=4M count=$(stat --format=%s live-image-amd64.hybrid.iso | awk '{print int($1/4194304)+1}') | md5sum
+md5sum live-image-amd64.hybrid.iso
+```
+
+**Explication des options :**
+- `if=` : Input file (fichier source)
+- `of=` : Output file (périphérique destination)
+- `bs=4M` : Block size de 4 MB (plus rapide)
+- `status=progress` : Afficher la progression
+- `oflag=sync` : Synchroniser les écritures
+- `sync` : Vider les buffers
+
+### Méthode 2 : Avec `cp` (plus simple)
+
+```bash
+# Méthode moderne et simple
+sudo cp live-image-amd64.hybrid.iso /dev/sdb
+sudo sync
+```
+
+### Méthode 3 : Avec Balena Etcher (GUI multiplateforme)
+
+```bash
+# Installation sur Linux
+curl -1sLf 'https://dl.cloudsmith.io/public/balena/etcher/setup.deb.sh' | sudo -E bash
+sudo apt install balena-etcher-electron
+
+# Lancer
+balena-etcher-electron
+```
+
+**Étapes :**
+1. Sélectionner l'ISO
+2. Sélectionner la clé USB
+3. Cliquer sur "Flash!"
+4. Attendre la vérification
+
+### Méthode 4 : Avec Rufus (Windows)
+
+1. Télécharger Rufus :  https://rufus.ie/
+2. Sélectionner le périphérique USB
+3. Sélectionner l'ISO
+4. Options de partition :  **GPT** (pour UEFI) ou **MBR** (pour BIOS)
+5. Système cible : **UEFI** ou **BIOS/CSM**
+6. Cliquer sur "Démarrer"
+
+### Méthode 5 : Avec Ventoy (multi-boot)
+
+Ventoy permet de mettre plusieurs ISOs sur une même clé USB.
+
+```bash
+# Télécharger Ventoy
+wget https://github.com/ventoy/Ventoy/releases/download/v1.0.96/ventoy-1.0.96-linux.tar.gz
+tar xf ventoy-1.0.96-linux.tar.gz
+cd ventoy-1.0.96
+
+# Installer Ventoy sur la clé USB (efface tout !)
+sudo ./Ventoy2Disk.sh -i /dev/sdb
+
+# Ensuite, copier simplement les ISOs sur la partition Ventoy
+cp live-image-amd64.hybrid.iso /media/user/Ventoy/
+
+# Au boot, Ventoy affichera un menu avec tous les ISOs disponibles
+```
+
+**Avantages de Ventoy :**
+- Multi-boot (plusieurs distributions)
+- Pas besoin de reformater pour changer d'ISO
+- Support UEFI Secure Boot
+- Persistance possible
+
+---
+
+## Boot depuis USB/DVD
+
+### Configuration du BIOS/UEFI
+
+#### Accéder au BIOS/UEFI
+
+Redémarrez l'ordinateur et appuyez sur : 
+- **F2** : Dell, Acer, Lenovo
+- **F10** : HP
+- **F12** : Dell (boot menu direct)
+- **Del** ou **Suppr** :  ASUS, MSI, Gigabyte
+- **Esc** : HP, ASUS
+
+#### Paramètres importants
+
+1. **Boot Order (Ordre de démarrage)**
+   - Placer USB/DVD en premier
+   - Ou utiliser le Boot Menu (F12 généralement)
+
+2. **Secure Boot**
+   - Désactiver si l'ISO n'est pas signée
+   - Ou signer votre kernel (avancé)
+
+3. **Fast Boot**
+   - Désactiver pour compatibilité
+
+4. **CSM (Compatibility Support Module)**
+   - Activer si boot en mode BIOS/Legacy
+   - Désactiver pour pure UEFI
+
+#### Mode de boot
+
+**UEFI** (moderne) :
+- GPT partition table
+- Support disques > 2 TB
+- Boot plus rapide
+- Plus sécurisé (Secure Boot)
+
+**BIOS/Legacy** (ancien) :
+- MBR partition table
+- Disques limités à 2 TB
+- Compatibilité matériel ancien
+
+### Démarrage du système Live
+
+#### Menu GRUB typique
+
+```
+╔════════════════════════════════════════╗
+║      Ma Distribution Linux v1.0        ║
+╠════════════════════════════════════════╣
+║  → Live (Mode par défaut)              ║
+║    Live (Mode sans échec)              ║
+║    Live (Vérification RAM)             ║
+║    Installer sur disque                ║
+║    Outils de récupération              ║
+╚════════════════════════════════════════╝
+```
+
+#### Options de boot communes
+
+Paramètres à ajouter au boot (touche `e` dans GRUB) :
+
+```bash
+# Mode sans échec (drivers basiques)
+nomodeset
+
+# Résolution d'écran fixe
+vga=791  # 1024x768 16-bit
+
+# Désactiver ACPI (problèmes d'alimentation)
+acpi=off
+
+# Désactiver APIC (problèmes d'interruptions)
+noapic
+
+# Mode texte uniquement (si X11 ne démarre pas)
+text
+
+# Langue et clavier
+locales=fr_FR.UTF-8 keyboard-layouts=fr
+
+# Exemple complet
+linux /live/vmlinuz boot=live components quiet splash nomodeset locales=fr_FR.UTF-8
+```
+
+---
+
+## Installation sur disque dur
+
+### Préparation
+
+#### Sauvegarde des données
+
+**⚠️ CRITIQUE : Toujours sauvegarder avant une installation ! **
+
+```bash
+# Sauvegarder le répertoire home
+rsync -avP /home/user/ /media/backup/home-backup/
+
+# Créer une image disque complète
+sudo dd if=/dev/sda of=/media/backup/disk-image.img bs=4M status=progress
+
+# Sauvegarder la table de partitions
+sudo sfdisk -d /dev/sda > partition-table-backup.txt
+```
+
+#### Identifier les disques
+
+```bash
+# Lister tous les disques
+lsblk -f
+
+# Informations détaillées
+sudo fdisk -l
+
+# Avec détails SMART
+sudo smartctl -a /dev/sda
+
+# UUID des partitions
+sudo blkid
+```
+
+### Schéma de partitionnement
+
+#### Option 1 : Partitionnement simple (débutant)
+
+**Pour UEFI :**
+
+| Partition | Point de montage | Taille | Type | Système de fichiers |
+|-----------|------------------|--------|------|---------------------|
+| /dev/sda1 | /boot/efi | 512 MB | EFI System | FAT32 |
+| /dev/sda2 | / | Reste | Linux filesystem | ext4 |
+
+**Pour BIOS/Legacy :**
+
+| Partition | Point de montage | Taille | Type | Système de fichiers |
+|-----------|------------------|--------|------|---------------------|
+| /dev/sda1 | / | Reste | Linux filesystem | ext4 |
+
+#### Option 2 : Partitionnement avancé
+
+**Pour UEFI :**
+
+| Partition | Point de montage | Taille | Type | Système de fichiers |
+|-----------|------------------|--------|------|---------------------|
+| /dev/sda1 | /boot/efi | 512 MB | EFI System | FAT32 |
+| /dev/sda2 | /boot | 1 GB | Linux filesystem | ext4 |
+| /dev/sda3 | / | 50 GB | Linux filesystem | ext4 |
+| /dev/sda4 | /home | Reste | Linux filesystem | ext4 |
+| swap | swap | 8 GB (= RAM) | Linux swap | swap |
+
+**Avantages :**
+- `/boot` séparé :  Facilite le multi-boot
+- `/home` séparé : Préserve les données lors de réinstallation
+- swap : Hibernate, mémoire virtuelle
+
+#### Option 3 : LVM (Logical Volume Manager)
+
+```bash
+# Créer un volume physique
+pvcreate /dev/sda2
+
+# Créer un groupe de volumes
+vgcreate vg0 /dev/sda2
+
+# Créer les volumes logiques
+lvcreate -L 50G -n root vg0
+lvcreate -L 8G -n swap vg0
+lvcreate -l 100%FREE -n home vg0
+
+# Formater
+mkfs.ext4 /dev/vg0/root
+mkfs.ext4 /dev/vg0/home
+mkswap /dev/vg0/swap
+```
+
+**Avantages LVM :**
+- Redimensionnement à chaud
+- Snapshots
+- Gestion flexible de l'espace
+
+### Installation manuelle (Debian)
+
+#### 1. Partitionnement avec `fdisk`
+
+```bash
+# Lancer fdisk
+sudo fdisk /dev/sda
+
+# Commandes dans fdisk : 
+# g        → Créer une table GPT (UEFI)
+# n        → Nouvelle partition
+# t        → Changer le type
+# w        → Écrire et quitter
+# p        → Afficher les partitions
+```
+
+**Exemple complet :**
+
+```bash
+sudo fdisk /dev/sda
+
+# Commandes à taper :
+g          # Nouvelle table GPT
+n          # Nouvelle partition
+<Enter>    # Numéro par défaut (1)
+<Enter>    # Premier secteur par défaut
++512M      # Taille :  512 MB pour EFI
+t          # Changer le type
+1          # Type EFI (EFI System)
+
+n          # Nouvelle partition (root)
+<Enter>    # Numéro 2
+<Enter>    # Premier secteur par défaut
+<Enter>    # Dernier secteur (tout le reste)
+
+w          # Écrire et quitter
+```
+
+#### 2. Formatage des partitions
+
+```bash
+# Formater la partition EFI en FAT32
+sudo mkfs. fat -F32 /dev/sda1
+
+# Formater la partition root en ext4
+sudo mkfs.ext4 /dev/sda2
+
+# Avec label
+sudo mkfs.ext4 -L "RootFS" /dev/sda2
+
+# Créer swap (optionnel)
+sudo mkswap /dev/sda3
+sudo swapon /dev/sda3
+```
+
+#### 3. Montage des partitions
+
+```bash
+# Monter la partition root
+sudo mount /dev/sda2 /mnt
+
+# Créer les points de montage
+sudo mkdir -p /mnt/boot/efi
+
+# Monter la partition EFI
+sudo mount /dev/sda1 /mnt/boot/efi
+```
+
+#### 4. Installation du système de base
+
+```bash
+# Installer le système de base avec debootstrap
+sudo debootstrap --arch=amd64 bookworm /mnt http://deb.debian.org/debian
+
+# Avec paquets supplémentaires
+sudo debootstrap --arch=amd64 --include=linux-image-amd64,grub-efi-amd64,networkmanager bookworm /mnt http://deb.debian.org/debian
+```
+
+#### 5. Configuration du système
+
+```bash
+# Entrer dans le chroot
+sudo mount --bind /dev /mnt/dev
+sudo mount --bind /proc /mnt/proc
+sudo mount --bind /sys /mnt/sys
+sudo chroot /mnt
+
+# Configurer le hostname
+echo "ma-distro" > /etc/hostname
+
+# Configurer hosts
+cat > /etc/hosts << EOF
+127.0.0.1   localhost
+127.0.1.1   ma-distro
+EOF
+
+# Configurer le réseau
+cat > /etc/network/interfaces << EOF
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+EOF
+
+# Configurer le timezone
+ln -sf /usr/share/zoneinfo/Europe/Paris /etc/localtime
+
+# Configurer les locales
+dpkg-reconfigure locales
+# Sélectionner fr_FR.UTF-8
+
+# Configurer le clavier
+dpkg-reconfigure keyboard-configuration
+```
+
+#### 6. Configurer fstab
+
+```bash
+# Obtenir les UUIDs
+blkid
+
+# Éditer fstab
+vim /etc/fstab
+
+# Exemple de contenu : 
+# UUID=xxxx-xxxx  /          ext4  defaults  0  1
+# UUID=yyyy-yyyy  /boot/efi  vfat  defaults  0  2
+# UUID=zzzz-zzzz  none       swap  sw        0  0
+```
+
+Contenu type de `/etc/fstab` :
+
+```bash
+# /etc/fstab:  static file system information
+#
+# <file system>                           <mount point>  <type>  <options>         <dump> <pass>
+
+UUID=12345678-90ab-cdef-1234-567890abcdef /              ext4    errors=remount-ro 0      1
+UUID=ABCD-1234                            /boot/efi      vfat    umask=0077        0      2
+UUID=87654321-ba09-fedc-4321-ba0987654321 none           swap    sw                0      0
+```
+
+#### 7. Installer et configurer GRUB
+
+```bash
+# Mettre à jour les sources APT
+apt update
+
+# Installer GRUB pour UEFI
+apt install grub-efi-amd64
+
+# Installer GRUB sur le disque
+grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=MaDistro
+
+# Générer la configuration
+update-grub
+
+# Pour BIOS/Legacy : 
+# grub-install /dev/sda
+```
+
+#### 8. Définir le mot de passe root
+
+```bash
+# Définir le mot de passe root
+passwd
+
+# Créer un utilisateur
+useradd -m -G sudo -s /bin/bash username
+passwd username
+```
+
+#### 9. Installer des paquets essentiels
+
+```bash
+# Outils système
+apt install sudo vim network-manager
+
+# Firmware (important pour WiFi, etc.)
+apt install firmware-linux firmware-linux-nonfree
+
+# Desktop (optionnel)
+apt install task-xfce-desktop
+
+# Activer NetworkManager
+systemctl enable NetworkManager
+```
+
+#### 10. Finalisation
+
+```bash
+# Quitter le chroot
+exit
+
+# Démonter les partitions
+sudo umount /mnt/boot/efi
+sudo umount /mnt/dev
+sudo umount /mnt/proc
+sudo umount /mnt/sys
+sudo umount /mnt
+
+# Désactiver swap
+sudo swapoff /dev/sda3
+
+# Redémarrer
+reboot
+```
+
+---
+
+## Installation automatisée
+
+### Preseed (Debian/Ubuntu)
+
+Fichier de configuration pour installation automatique. 
+
+```bash
+# Créer un fichier preseed
+cat > preseed.cfg << 'EOF'
+# Localization
+d-i debian-installer/locale string fr_FR.UTF-8
+d-i keyboard-configuration/xkb-keymap select fr
+
+# Network
+d-i netcfg/choose_interface select auto
+d-i netcfg/get_hostname string ma-distro
+
+# Mirror
+d-i mirror/country string manual
+d-i mirror/http/hostname string deb.debian.org
+d-i mirror/http/directory string /debian
+
+# Account
+d-i passwd/user-fullname string Custom User
+d-i passwd/username string customuser
+d-i passwd/user-password password password123
+d-i passwd/user-password-again password password123
+d-i passwd/root-password password rootpass
+d-i passwd/root-password-again password rootpass
+
+# Partitioning
+d-i partman-auto/method string regular
+d-i partman-auto/choose_recipe select atomic
+d-i partman/confirm_write_new_label boolean true
+d-i partman/choose_partition select finish
+d-i partman/confirm boolean true
+
+# Packages
+tasksel tasksel/first multiselect standard, xfce-desktop
+d-i pkgsel/include string vim git htop
+
+# GRUB
+d-i grub-installer/only_debian boolean true
+d-i grub-installer/bootdev string /dev/sda
+
+# Finish
+d-i finish-install/reboot_in_progress note
+EOF
+```
+
+**Utilisation :**
+
+```bash
+# Au boot, passer le paramètre : 
+auto=true url=http://server/preseed.cfg
+```
+
+### Kickstart (Fedora/RHEL)
+
+```bash
+# Exemple de kickstart
+cat > kickstart.cfg << 'EOF'
+#version=RHEL8
+install
+url --url="http://mirror.centos.org/centos/8/BaseOS/x86_64/os/"
+
+lang fr_FR.UTF-8
+keyboard fr
+timezone Europe/Paris --utc
+
+network --bootproto=dhcp --device=eth0 --onboot=yes
+
+rootpw --plaintext password123
+user --name=customuser --password=password123 --plaintext --groups=wheel
+
+bootloader --location=mbr --boot-drive=sda
+
+clearpart --all --drives=sda
+autopart
+
+%packages
+@core
+@base
+@development
+vim
+git
+%end
+
+reboot
+EOF
+```
+
+---
+
+## Configuration post-installation
+
+### Mise à jour du système
+
+```bash
+# Debian/Ubuntu
+sudo apt update
+sudo apt upgrade -y
+sudo apt dist-upgrade -y
+
+# Arch
+sudo pacman -Syu
+
+# Fedora
+sudo dnf update -y
+```
+
+### Installation des drivers
+
+```bash
+# Nvidia (Debian)
+sudo apt install nvidia-driver
+
+# AMD
+sudo apt install firmware-amd-graphics
+
+# Intel
+sudo apt install intel-microcode
+```
+
+### Configuration du réseau
+
+```bash
+# Avec NetworkManager
+sudo systemctl enable NetworkManager
+sudo systemctl start NetworkManager
+
+# WiFi
+nmcli device wifi list
+nmcli device wifi connect SSID password PASSWORD
+
+# IP statique
+sudo nmcli con mod eth0 ipv4.addresses 192.168.1.100/24
+sudo nmcli con mod eth0 ipv4.gateway 192.168.1.1
+sudo nmcli con mod eth0 ipv4.dns "8.8.8.8 8.8.4.4"
+sudo nmcli con mod eth0 ipv4.method manual
+sudo nmcli con up eth0
+```
+
+### Configuration SSH
+
+```bash
+# Installer et activer SSH
+sudo apt install openssh-server
+sudo systemctl enable ssh
+sudo systemctl start ssh
+
+# Sécuriser SSH
+sudo vim /etc/ssh/sshd_config
+
+# Modifications recommandées :
+# PermitRootLogin no
+# PasswordAuthentication no (après configuration de clés)
+# Port 2222 (changer le port)
+
+# Redémarrer SSH
+sudo systemctl restart ssh
+
+# Générer une paire de clés (client)
+ssh-keygen -t ed25519 -C "votre. email@example.com"
+
+# Copier la clé sur le serveur
+ssh-copy-id user@server
+```
+
+### Configuration du firewall
+
+```bash
+# UFW (Debian/Ubuntu)
+sudo apt install ufw
+sudo ufw enable
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow ssh
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw status
+
+# Firewalld (Fedora)
+sudo systemctl enable firewalld
+sudo systemctl start firewalld
+sudo firewall-cmd --permanent --add-service=ssh
+sudo firewall-cmd --reload
+```
+
+---
+
+## Tests et validation
+
+### Vérifications de base
+
+```bash
+# Version du kernel
+uname -r
+
+# Version de la distribution
+cat /etc/os-release
+
+# Utilisation disque
+df -h
+
+# Utilisation mémoire
+free -h
+
+# Processus
+ps aux | head
+
+# Services actifs
+systemctl list-units --type=service --state=running
+
+# Logs système
+journalctl -xe
+```
+
+### Tests matériels
+
+```bash
+# Informations CPU
+lscpu
+
+# Informations mémoire
+sudo dmidecode --type memory
+
+# Informations PCI (carte graphique, etc.)
+lspci -v
+
+# Tests de performance disque
+sudo hdparm -tT /dev/sda
+
+# Test de stress CPU
+sudo apt install stress
+stress --cpu 4 --timeout 60s
+```
+
+---
+
+## Navigation
+
+⬅️ Précédent : [Méthodes de création](03-methodes-creation.md)  
+➡️ Suivant : [Personnalisation avancée](05-personnalisation. md)
