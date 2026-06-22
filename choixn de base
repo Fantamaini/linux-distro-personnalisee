@@ -1,0 +1,512 @@
+# Choix de la base
+
+## Critères de sélection
+
+Le choix de la distribution de base dépend de plusieurs facteurs :
+
+| Critère | Questions à se poser |
+|---------|---------------------|
+| **Objectif** | Usage serveur, desktop, embarqué ?  |
+| **Taille** | Système minimal ou complet ? |
+| **Stabilité** | Production ou expérimentation ? |
+| **Support** | Documentation et communauté ?  |
+| **Packages** | Gestionnaire de paquets préféré ? |
+| **Maintenance** | Mises à jour fréquentes ou LTS ? |
+| **Licence** | 100% libre ou accepte du propriétaire ? |
+
+## Principales bases disponibles
+
+### 1. Debian
+
+**Description :**  
+Distribution communautaire la plus populaire, connue pour sa stabilité exceptionnelle. 
+
+**Avantages :**
+- ✅ Très stable et bien documentée
+- ✅ Gestionnaire APT puissant et mature
+- ✅ Large support communautaire
+- ✅ Outils officiels :  `live-build`, `debootstrap`
+- ✅ Support de nombreuses architectures (amd64, arm, i386...)
+- ✅ Cycle de release prévisible (tous les 2 ans)
+
+**Inconvénients :**
+- ❌ Paquets parfois anciens (version stable)
+- ❌ Processus de release lent
+- ❌ Configuration parfois technique
+
+**Versions :**
+- **Stable (Bookworm)** : Pour production
+- **Testing** :  Équilibre stabilité/nouveauté
+- **Unstable (Sid)** : Dernières versions
+
+**Justification du choix :**  
+Idéal pour un système de production nécessitant stabilité et fiabilité.  Excellent pour serveurs et environnements d'entreprise.
+
+**Exemple d'utilisation :**
+
+```bash
+# Installation minimale avec debootstrap
+sudo apt install debootstrap
+sudo debootstrap --arch=amd64 bookworm /mnt/debian http://deb.debian.org/debian
+
+# Entrer dans le chroot
+sudo chroot /mnt/debian /bin/bash
+
+# Installer des paquets de base
+apt update
+apt install linux-image-amd64 grub2
+```
+
+---
+
+### 2. Ubuntu
+
+**Description :**  
+Basée sur Debian, Ubuntu offre une expérience plus moderne et user-friendly.
+
+**Avantages :**
+- ✅ Base Debian avec paquets plus récents
+- ✅ Excellent support matériel (drivers propriétaires)
+- ✅ Outils :  Cubic, Ubuntu Customization Kit
+- ✅ Large communauté et documentation
+- ✅ Support commercial disponible (Canonical)
+- ✅ LTS tous les 2 ans (5 ans de support)
+
+**Inconvénients :**
+- ❌ Plus lourd que Debian
+- ❌ Certains composants propriétaires par défaut
+- ❌ Snap parfois controversé
+
+**Versions :**
+- **LTS (22.04, 24.04)** : Support longue durée
+- **Interim** : Nouvelles fonctionnalités (6 mois de support)
+
+**Justification du choix :**  
+Parfait pour un desktop avec support matériel moderne. Idéal pour les débutants ou environnements nécessitant un support commercial.
+
+**Exemple d'utilisation :**
+
+```bash
+# Utilisation avec Cubic (interface graphique)
+sudo apt-add-repository ppa:cubic-wizard/release
+sudo apt update
+sudo apt install cubic
+
+# Lancer Cubic
+cubic
+```
+
+---
+
+### 3. Arch Linux
+
+**Description :**  
+Distribution rolling release minimaliste suivant la philosophie KISS (Keep It Simple, Stupid).
+
+**Avantages :**
+- ✅ Rolling release (toujours à jour)
+- ✅ Philosophie KISS (simplicité et contrôle)
+- ✅ AUR (Arch User Repository) - 85,000+ paquets
+- ✅ Outil officiel : `archiso`
+- ✅ Documentation exceptionnelle (ArchWiki)
+- ✅ Système ultra-personnalisable
+
+**Inconvénients :**
+- ❌ Moins stable (mises à jour fréquentes peuvent casser)
+- ❌ Nécessite plus d'expertise
+- ❌ Pas de support LTS
+- ❌ Installation manuelle (pas d'installeur graphique de base)
+
+**Justification du choix :**  
+Excellent pour les utilisateurs avancés voulant un système minimaliste, toujours à jour, et totalement sous contrôle. 
+
+**Exemple d'utilisation :**
+
+```bash
+# Installation de archiso
+sudo pacman -S archiso
+
+# Copier le profil releng
+cp -r /usr/share/archiso/configs/releng ~/archlive
+
+# Personnaliser
+cd ~/archlive
+vim packages.x86_64
+
+# Construire l'ISO
+sudo mkarchiso -v -w work -o out ~/archlive
+```
+
+---
+
+### 4. Fedora
+
+**Description :**  
+Distribution communautaire sponsorisée par Red Hat, orientée innovation. 
+
+**Avantages :**
+- ✅ Technologies récentes (systemd, Wayland, PipeWire)
+- ✅ Bon équilibre stabilité/nouveauté
+- ✅ Support SELinux par défaut
+- ✅ Gestionnaire DNF moderne
+- ✅ Base pour RHEL (Red Hat Enterprise Linux)
+
+**Inconvénients :**
+- ❌ Cycle de vie court (13 mois)
+- ❌ Moins de paquets tiers qu'Ubuntu/Debian
+- ❌ Outils de personnalisation moins matures
+
+**Justification du choix :**  
+Idéal pour tester les dernières technologies Linux dans un environnement relativement stable. 
+
+---
+
+### 5. Alpine Linux
+
+**Description :**  
+Distribution ultra-légère basée sur musl libc et BusyBox.
+
+**Avantages :**
+- ✅ Extrêmement légère (130 MB de base)
+- ✅ Sécurisée (musl, PaX, grsecurity)
+- ✅ Rapide et efficace
+- ✅ Populaire pour containers (Docker)
+- ✅ Gestionnaire APK simple
+
+**Inconvénients :**
+- ❌ Compatibilité limitée (musl au lieu de glibc)
+- ❌ Moins de paquets disponibles
+- ❌ Communauté plus petite
+
+**Justification du choix :**  
+Parfait pour systèmes embarqués, containers, ou environnements avec ressources limitées.
+
+---
+
+### 6. Linux From Scratch (LFS)
+
+**Description :**  
+Pas une distribution mais un guide pour construire son propre Linux depuis zéro.
+
+**Avantages :**
+- ✅ Contrôle total sur chaque composant
+- ✅ Apprentissage maximal du système
+- ✅ Optimisation complète pour votre matériel
+- ✅ Compréhension profonde de Linux
+
+**Inconvénients :**
+- ❌ Très chronophage (40-80 heures)
+- ❌ Nécessite expertise avancée
+- ❌ Maintenance complexe
+- ❌ Pas de gestionnaire de paquets par défaut
+
+**Justification du choix :**  
+Objectif purement pédagogique pour comprendre Linux en profondeur.
+
+**Étapes principales :**
+
+```bash
+# 1. Préparer l'environnement hôte
+# 2. Créer une partition dédiée
+# 3. Télécharger les sources
+wget http://www.linuxfromscratch.org/lfs/downloads/stable/LFS-BOOK. tar.bz2
+
+# 4. Compiler la toolchain temporaire
+# 5. Compiler le système final
+# 6. Configuration du système
+# 7. Rendre bootable
+```
+
+---
+
+## Comparaison détaillée
+
+| Distribution | Difficulté | Stabilité | Packages | Taille base | Cycle release |
+|--------------|-----------|-----------|----------|-------------|---------------|
+| **Debian** | Moyen | ⭐⭐⭐⭐⭐ | 59,000+ | ~400 MB | 2 ans (stable) |
+| **Ubuntu** | Facile | ⭐⭐⭐⭐ | 70,000+ | ~2 GB | 6 mois / 2 ans (LTS) |
+| **Arch** | Difficile | ⭐⭐⭐ | 13,000+ (85,000+ AUR) | ~800 MB | Rolling |
+| **Fedora** | Moyen | ⭐⭐⭐⭐ | 50,000+ | ~1.5 GB | 6 mois |
+| **Alpine** | Moyen | ⭐⭐⭐⭐ | 14,000+ | ~130 MB | 6 mois |
+| **LFS** | Expert | Variable | À compiler | ~300 MB | N/A |
+
+---
+
+## Composants essentiels d'une distribution
+
+Quelle que soit la base choisie, une distribution Linux nécessite ces composants :
+
+### 1. Le Kernel (Noyau)
+
+Le noyau Linux est le composant central qui gère :
+- Gestion du matériel (drivers)
+- Processus et ordonnancement (scheduler)
+- Mémoire virtuelle et swap
+- Système de fichiers (VFS)
+- Communication réseau (stack TCP/IP)
+
+**Commandes utiles :**
+
+```bash
+# Vérifier la version du noyau
+uname -r
+
+# Voir les informations détaillées
+uname -a
+
+# Télécharger le kernel source
+wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.6.tar.xz
+tar xf linux-6.6.tar.xz
+cd linux-6.6
+
+# Configuration
+make menuconfig
+
+# Compilation
+make -j$(nproc)
+make modules_install
+make install
+```
+
+**Versions du kernel :**
+- **Mainline** : Dernière version stable
+- **Stable** :  Versions avec patches de sécurité
+- **Longterm** : Support étendu (plusieurs années)
+
+---
+
+### 2. Le Bootloader
+
+Charge le noyau au démarrage.  Le bootloader lit la configuration, charge le kernel et l'initramfs en mémoire.
+
+**GRUB2** (le plus courant)
+
+```bash
+# Installation
+sudo grub-install /dev/sda
+sudo update-grub
+
+# Configuration
+vim /etc/default/grub
+# Modifier GRUB_CMDLINE_LINUX="quiet splash"
+
+# Régénérer la config
+sudo grub-mkconfig -o /boot/grub/grub.cfg
+```
+
+**Alternatives :**
+- **SYSLINUX** : Plus simple, pour systèmes légers
+- **systemd-boot** :  Intégré à systemd, UEFI uniquement
+- **rEFInd** : Bootloader graphique pour UEFI
+- **LILO** :  Ancien, rarement utilisé aujourd'hui
+
+---
+
+### 3. Le Shell
+
+Interface en ligne de commande pour interagir avec le système.
+
+**Bash** (standard)
+
+```bash
+#!/bin/bash
+echo "Shell par défaut sur la plupart des distributions"
+
+# Variables
+DISTRO="Ma Distribution"
+echo $DISTRO
+
+# Boucles
+for i in {1..5}; do
+    echo "Itération $i"
+done
+```
+
+**Alternatives :**
+- **zsh** : Plus de fonctionnalités (auto-complétion avancée, thèmes)
+- **fish** : User-friendly, syntaxe moderne
+- **dash** : Léger et rapide (souvent utilisé pour /bin/sh)
+
+---
+
+### 4. Système d'initialisation (Init System)
+
+Premier processus lancé par le kernel (PID 1), gère le démarrage et les services. 
+
+**systemd** (moderne, standard actuel)
+
+```bash
+# Démarrer un service
+systemctl start nginx
+
+# Activer au boot
+systemctl enable nginx
+
+# Voir le status
+systemctl status nginx
+
+# Voir tous les services
+systemctl list-units --type=service
+
+# Logs
+journalctl -u nginx
+```
+
+**Alternatives :**
+- **OpenRC** : Plus simple et modulaire (Gentoo)
+- **runit** : Minimaliste et rapide (Void Linux)
+- **SysVinit** : Traditionnel, ancien standard
+- **s6** : Moderne et léger
+
+---
+
+### 5. Gestionnaire de paquets
+
+Gère l'installation, la mise à jour et la suppression des logiciels.
+
+| Distribution | Gestionnaire | Format | Commandes de base |
+|--------------|--------------|--------|-------------------|
+| Debian/Ubuntu | APT | .deb | `apt install`, `apt update`, `apt upgrade` |
+| Arch | Pacman | .pkg. tar.zst | `pacman -S`, `pacman -Syu`, `pacman -R` |
+| Fedora | DNF | .rpm | `dnf install`, `dnf update` |
+| Alpine | APK | .apk | `apk add`, `apk update` |
+| Gentoo | Portage | source | `emerge package` |
+
+**Exemple APT :**
+
+```bash
+# Mise à jour de la liste des paquets
+apt update
+
+# Installer un paquet
+apt install vim
+
+# Rechercher un paquet
+apt search nginx
+
+# Voir les infos
+apt show nginx
+
+# Supprimer
+apt remove nginx
+
+# Nettoyer le cache
+apt clean
+```
+
+---
+
+### 6. Bibliothèques système
+
+**glibc** (GNU C Library)
+- Bibliothèque C standard pour Linux
+- Essentielle pour presque tous les programmes
+- Fournit les fonctions de base (malloc, printf, etc.)
+
+```bash
+# Version de glibc
+ldd --version
+```
+
+**Alternatives :**
+- **musl** : Plus légère et sécurisée (Alpine Linux)
+- **uClibc** : Pour systèmes embarqués
+- **dietlibc** : Ultra-minimale
+
+---
+
+### 7. Utilitaires de base
+
+**GNU Coreutils** :  ls, cp, mv, rm, cat, chmod, chown... 
+
+```bash
+# Lister
+ls -lah
+
+# Copier
+cp -r source destination
+
+# Déplacer/renommer
+mv ancien nouveau
+
+# Supprimer
+rm -rf dossier
+```
+
+**Procps** : ps, top, kill, free, uptime... 
+
+```bash
+# Processus
+ps aux
+
+# Utilisation système
+top
+htop
+
+# Mémoire
+free -h
+```
+
+**Util-linux** : mount, fdisk, dmesg, lsblk... 
+
+```bash
+# Monter
+mount /dev/sdb1 /mnt
+
+# Partitions
+lsblk
+fdisk -l
+
+# Messages kernel
+dmesg | tail
+```
+
+---
+
+## Architecture recommandée pour ce projet
+
+Pour un équilibre optimal entre apprentissage, stabilité et facilité : 
+
+```
+Distribution personnalisée
+│
+├── Base:  Debian 12 (Bookworm)
+├── Kernel: Linux 6.6 LTS
+├── Bootloader:  GRUB2
+├── Init system: systemd
+├── Shell:  bash (+ zsh optionnel)
+├── Package manager: APT
+├── C Library: glibc
+├── Utilitaires: GNU coreutils
+└── Desktop:  XFCE (léger) ou GNOME (complet)
+```
+
+---
+
+## Décision finale
+
+### Recommandation pour ce projet :  **Debian 12 (Bookworm)**
+
+**Justification détaillée :**
+
+1. **Stabilité éprouvée** : Debian Stable est testée pendant 2 ans avant release
+2. **Documentation excellente** : Manuel officiel complet + communauté active
+3. **Outils officiels** : `live-build` est mature et bien maintenu
+4. **Large communauté** : Support facile à trouver
+5. **Équilibre** : Parfait compromis entre facilité et contrôle technique
+6. **Reproductibilité** : Configuration déclarative facile à versionner
+7. **Compatibilité** : Large support matériel
+
+### Alternative recommandée : **Arch Linux**
+
+Si vous voulez pousser l'apprentissage plus loin : 
+- Compréhension plus profonde du système
+- Contrôle total sur les composants
+- Documentation exceptionnelle (ArchWiki)
+
+---
+
+## Navigation
+
+⬅️ Précédent : [Introduction](01-introduction.md)  
+➡️ Suivant : [Méthodes de création](03-methodes-creation.md)
