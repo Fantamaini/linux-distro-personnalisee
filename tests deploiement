@@ -1,0 +1,780 @@
+# Tests et déploiement
+
+## Vue d'ensemble
+
+Avant de déployer votre distribution, il est crucial de la tester rigoureusement pour : 
+- Vérifier la stabilité du système
+- Détecter les bugs et erreurs
+- Valider la compatibilité matérielle
+- Mesurer les performances
+- Assurer la sécurité
+
+---
+
+## Tests en environnement virtuel
+
+### QEMU/KVM
+
+QEMU est l'outil de référence pour tester des distributions Linux. 
+
+#### Installation
+
+```bash
+# Debian/Ubuntu
+sudo apt install qemu-system-x86 qemu-utils qemu-kvm
+
+# Arch
+sudo pacman -S qemu-full
+
+# Vérifier le support KVM (accélération matérielle)
+lsmod | grep kvm
+egrep -c '(vmx|svm)' /proc/cpuinfo  # Doit retourner > 0
+```
+
+#### Tests basiques
+
+```bash
+# Test simple avec 4GB RAM
+qemu-system-x86_64 \
+  -m 4096 \
+  -cdrom live-image-amd64.hybrid.iso \
+  -boot d
+
+# Test avec accélération KVM (beaucoup plus rapide)
+qemu-system-x86_64 \
+  -m 4096 \
+  -cdrom live-image-amd64.hybrid.iso \
+  -boot d \
+  -enable-kvm \
+  -cpu host
+
+# Test avec interface graphique SDL
+qemu-system-x86_64 \
+  -m 4096 \
+  -cdrom live-image-amd64.hybrid.iso \
+  -boot d \
+  -enable-kvm \
+  -cpu host \
+  -vga virtio \
+  -display sdl,gl=on
+
+# Test avec réseau (NAT)
+qemu-system-x86_64 \
+  -m 4096 \
+  -cdrom live-image-amd64.hybrid.iso \
+  -boot d \
+  -enable-kvm \
+  -netdev user,id=net0 \
+  -device e1000,netdev=net0
+```
+
+#### Tests avec disque virtuel
+
+```bash
+# Créer un disque virtuel de 30GB
+qemu-img create -f qcow2 test-disk.qcow2 30G
+
+# Tester l'installation
+qemu-system-x86_64 \
+  -m 4096 \
+  -cdrom live-image-amd64.hybrid.iso \
+  -drive file=test-disk.qcow2,format=qcow2 \
+  -boot d \
+  -enable-kvm \
+  -cpu host
+
+# Démarrer depuis le disque installé (après installation)
+qemu-system-x86_64 \
+  -m 4096 \
+  -drive file=test-disk.qcow2,format=qcow2 \
+  -boot c \
+  -enable-kvm \
+  -cpu host
+```
+
+#### Tests UEFI
+
+```bash
+# Installer OVMF (UEFI firmware)
+sudo apt install ovmf
+
+# Tester en mode UEFI
+qemu-system-x86_64 \
+  -m 4096 \
+  -cdrom live-image-amd64.hybrid. iso \
+  -boot d \
+  -enable-kvm \
+  -bios /usr/share/ovmf/OVMF. fd
+```
+
+#### Script de test automatisé
+
+```bash
+#!/bin/bash
+
+ISO_FILE="live-image-amd64.hybrid.iso"
+DISK_FILE="test-disk.qcow2"
+MEMORY=4096
+
+echo "=== Tests QEMU pour Ma Distribution ==="
+
+# Test 1 : Boot basique
+echo "Test 1 : Boot basique..."
+timeout 120 qemu-system-x86_64 -m $MEMORY -cdrom $ISO_FILE -boot d -nographic &
+BOOT_PID=$!
+sleep 120
+kill $BOOT_PID 2>/dev/null
+echo "✓ Test 1 terminé"
+
+# Test 2 : Boot UEFI
+echo "Test 2 : Boot UEFI..."
+timeout 120 qemu-system-x86_64 -m $MEMORY -cdrom $ISO_FILE -boot d -bios /usr/share/ovmf/OVMF.fd -nographic &
+BOOT_PID=$!
+sleep 120
+kill $BOOT_PID 2>/dev/null
+echo "✓ Test 2 terminé"
+
+# Test 3 :  Installation
+echo "Test 3 :  Installation sur disque..."
+qemu-img create -f qcow2 $DISK_FILE 30G
+# Lancer l'installation manuellement ici
+
+echo "=== Tests terminés ==="
+```
+
+### VirtualBox
+
+```bash
+# Installer VirtualBox
+sudo apt install virtualbox virtualbox-ext-pack
+
+# Créer une VM via CLI
+VBoxManage createvm --name "Ma Distro Test" --ostype "Debian_64" --register
+
+# Configurer la VM
+VBoxManage modifyvm "Ma Distro Test" \
+  --memory 4096 \
+  --cpus 2 \
+  --vram 128 \
+  --acpi on \
+  --boot1 dvd \
+  --nic1 nat
+
+# Créer un disque virtuel
+VBoxManage createhd --filename ~/VirtualBox\ VMs/Ma\ Distro\ Test/disk.vdi --size 30720
+
+# Attacher le disque
+VBoxManage storagectl "Ma Distro Test" --name "SATA" --add sata --controller IntelAhci
+VBoxManage storageattach "Ma Distro Test" --storagectl "SATA" --port 0 --device 0 --type hdd --medium ~/VirtualBox\ VMs/Ma\ Distro\ Test/disk.vdi
+
+# Attacher l'ISO
+VBoxManage storagectl "Ma Distro Test" --name "IDE" --add ide
+VBoxManage storageattach "Ma Distro Test" --storagectl "IDE" --port 0 --device 0 --type dvddrive --medium live-image-amd64.hybrid. iso
+
+# Démarrer la VM
+VBoxManage startvm "Ma Distro Test"
+
+# Ou en mode headless (sans GUI)
+VBoxManage startvm "Ma Distro Test" --type headless
+```
+
+### VMware
+
+```bash
+# Créer un fichier . vmx
+cat > ma-distro. vmx << EOF
+. encoding = "UTF-8"
+config.version = "8"
+virtualHW.version = "19"
+vmci0.present = "TRUE"
+displayName = "Ma Distribution"
+guestOS = "debian11-64"
+memsize = "4096"
+numvcpus = "2"
+ide0:0.present = "TRUE"
+ide0:0.fileName = "ma-distro.vmdk"
+ide1:0.present = "TRUE"
+ide1:0.fileName = "live-image-amd64.hybrid.iso"
+ide1:0.deviceType = "cdrom-image"
+ethernet0.present = "TRUE"
+ethernet0.connectionType = "nat"
+EOF
+
+# Créer le disque virtuel
+vmware-vdiskmanager -c -s 30GB -a lsilogic -t 0 ma-distro.vmdk
+
+# Lancer avec VMware Player
+vmplayer ma-distro.vmx
+```
+
+---
+
+## Tests de compatibilité matérielle
+
+### Tests sur matériel réel
+
+#### Checklist de tests matériels
+
+- [ ] **CPU** : Vérifier la détection et l'utilisation
+- [ ] **RAM** : Test de mémoire (memtest86+)
+- [ ] **Disque** : SSD/HDD détecté, TRIM fonctionne
+- [ ] **Graphique** : Résolution correcte, accélération 3D
+- [ ] **Audio** : Sortie haut-parleurs et casque
+- [ ] **Réseau** : Ethernet et WiFi
+- [ ] **USB** : Ports USB 2.0/3.0/3.1
+- [ ] **Bluetooth** : Détection et pairing
+- [ ] **Webcam** : Détection et capture
+- [ ] **Touchpad** : Multitouch, défilement
+- [ ] **Clavier** : Touches spéciales, rétroéclairage
+- [ ] **Batterie** : Détection, estimation autonomie (laptop)
+- [ ] **Suspend/Resume** : Mise en veille et réveil
+
+#### Scripts de vérification matérielle
+
+```bash
+#!/bin/bash
+
+echo "=== Tests de compatibilité matérielle ==="
+
+# CPU
+echo "--- CPU ---"
+lscpu | grep "Model name"
+echo "Cœurs :  $(nproc)"
+
+# RAM
+echo "--- RAM ---"
+free -h | grep "Mem:"
+
+# Disque
+echo "--- Disques ---"
+lsblk -o NAME,SIZE,TYPE,MOUNTPOINT
+
+# Graphique
+echo "--- Carte graphique ---"
+lspci | grep VGA
+
+# Vérifier le driver utilisé
+lspci -k | grep -A 3 VGA
+
+# Audio
+echo "--- Audio ---"
+aplay -l
+
+# Réseau
+echo "--- Réseau ---"
+ip link show
+
+# WiFi
+echo "--- WiFi ---"
+nmcli device status
+
+# USB
+echo "--- Périphériques USB ---"
+lsusb
+
+# Bluetooth
+echo "--- Bluetooth ---"
+hciconfig -a
+
+# Batterie (laptop)
+echo "--- Batterie ---"
+upower -i /org/freedesktop/UPower/devices/battery_BAT0
+
+echo "=== Tests terminés ==="
+```
+
+### Tests de stress
+
+#### CPU stress test
+
+```bash
+# Installer stress
+sudo apt install stress stress-ng
+
+# Test CPU (4 workers pendant 60 secondes)
+stress --cpu 4 --timeout 60s
+
+# Test avancé avec stress-ng
+stress-ng --cpu 4 --cpu-method all --verify --timeout 5m
+
+# Surveiller la température
+sudo apt install lm-sensors
+sensors
+
+# Surveiller en continu
+watch -n 1 sensors
+```
+
+#### Mémoire stress test
+
+```bash
+# Test RAM (utiliser 2GB pendant 30s)
+stress --vm 2 --vm-bytes 1G --timeout 30s
+
+# Test complet
+stress-ng --vm 4 --vm-bytes 80% --timeout 10m
+
+# Memtest au boot
+# Sélectionner "Memory test (memtest86+)" dans GRUB
+```
+
+#### Disque stress test
+
+```bash
+# Test lecture/écriture
+sudo apt install fio
+
+# Test séquentiel
+fio --name=seqwrite --rw=write --bs=1M --size=1G --numjobs=1 --filename=/tmp/testfile
+
+# Test aléatoire
+fio --name=randwrite --rw=randwrite --bs=4k --size=1G --numjobs=4 --filename=/tmp/testfile
+
+# Benchmark simple
+sudo hdparm -tT /dev/sda
+
+# Test avec dd
+dd if=/dev/zero of=/tmp/testfile bs=1M count=1024 conv=fdatasync
+```
+
+#### Graphique stress test
+
+```bash
+# Installer glmark2
+sudo apt install glmark2
+
+# Test OpenGL
+glmark2
+
+# Test en fullscreen
+glmark2 --fullscreen
+
+# Voir les infos GPU
+glxinfo | grep "OpenGL"
+
+# FPS
+vblank_mode=0 glxgears
+```
+
+---
+
+## Tests de performance
+
+### Benchmarks système
+
+#### Geekbench
+
+```bash
+# Télécharger
+wget https://cdn.geekbench.com/Geekbench-6.2.0-Linux.tar.gz
+tar xf Geekbench-6.2.0-Linux.tar. gz
+cd Geekbench-6.2.0-Linux
+
+# Lancer
+./geekbench6
+
+# Résultats dans :   ~/. geekbench6/
+```
+
+#### sysbench
+
+```bash
+# Installer
+sudo apt install sysbench
+
+# Test CPU
+sysbench cpu --threads=4 --time=60 run
+
+# Test mémoire
+sysbench memory --threads=4 --memory-total-size=10G run
+
+# Test I/O
+sysbench fileio --file-test-mode=seqwr --file-total-size=2G prepare
+sysbench fileio --file-test-mode=seqwr --file-total-size=2G run
+sysbench fileio --file-test-mode=seqwr --file-total-size=2G cleanup
+```
+
+#### UnixBench
+
+```bash
+# Télécharger
+git clone https://github.com/kdlucas/byte-unixbench.git
+cd byte-unixbench/UnixBench
+
+# Compiler et lancer
+make
+./Run
+
+# Résultats dans :   results/
+```
+
+### Benchmarks applicatifs
+
+#### Temps de démarrage
+
+```bash
+# Analyser avec systemd-analyze
+systemd-analyze
+
+# Services lents
+systemd-analyze blame
+
+# Chemin critique
+systemd-analyze critical-chain
+
+# Graphique
+systemd-analyze plot > boot. svg
+```
+
+#### Utilisation mémoire
+
+```bash
+# Mémoire au démarrage (après boot complet)
+free -h
+
+# Détail par processus
+ps aux --sort=-%mem | head -n 10
+
+# Avec htop
+sudo apt install htop
+htop
+```
+
+#### Réactivité interface
+
+```bash
+# Mesurer le temps de lancement d'applications
+time firefox &
+
+# Script de benchmark
+#!/bin/bash
+APPS=("firefox" "libreoffice" "gimp")
+for app in "${APPS[@]}"; do
+    echo "Test $app..."
+    TIME=$( { time $app & } 2>&1 | grep real | awk '{print $2}')
+    echo "$app: $TIME"
+    sleep 5
+    pkill $app
+done
+```
+
+---
+
+## Tests de sécurité
+
+### Audit de sécurité
+
+#### Lynis
+
+```bash
+# Installer Lynis
+sudo apt install lynis
+
+# Lancer l'audit
+sudo lynis audit system
+
+# Rapport détaillé dans :  /var/log/lynis. log
+
+# Voir les suggestions
+sudo lynis show suggestions
+```
+
+#### CIS Benchmark
+
+```bash
+# Installer les scripts CIS
+git clone https://github.com/dev-sec/cis-dil-benchmark.git
+cd cis-dil-benchmark
+
+# Lancer les tests
+sudo ./bin/hardening. sh --audit all
+```
+
+#### Vérification des ports ouverts
+
+```bash
+# Installer nmap
+sudo apt install nmap
+
+# Scanner localhost
+sudo nmap -sS -p- localhost
+
+# Voir les connexions actives
+sudo netstat -tulpn
+
+# Ou avec ss (plus moderne)
+sudo ss -tulpn
+```
+
+#### Vérification des permissions
+
+```bash
+# Fichiers world-writable (dangereux)
+sudo find / -xdev -type f -perm -0002 -ls 2>/dev/null
+
+# Fichiers SUID (potentiel privilège escalation)
+sudo find / -xdev -type f -perm -4000 -ls 2>/dev/null
+
+# Fichiers sans propriétaire
+sudo find / -xdev -nouser -o -nogroup 2>/dev/null
+```
+
+### Tests de pénétration
+
+```bash
+# Installer les outils
+sudo apt install nmap metasploit-framework
+
+# Scanner réseau
+nmap -sV -O localhost
+
+# Test de force brute SSH (sur VM test uniquement !)
+hydra -l user -P /usr/share/wordlists/rockyou.txt ssh://192.168.1.100
+```
+
+---
+
+## Tests de régression
+
+### Suite de tests automatisés
+
+```bash
+#!/bin/bash
+
+LOGFILE="test-results-$(date +%Y%m%d-%H%M%S).log"
+
+echo "=== Suite de tests - Ma Distribution ===" | tee $LOGFILE
+
+# Test 1 : Système démarre
+echo "Test 1: Vérification démarrage..." | tee -a $LOGFILE
+if systemctl is-system-running &>/dev/null; then
+    echo "✓ PASS" | tee -a $LOGFILE
+else
+    echo "✗ FAIL" | tee -a $LOGFILE
+fi
+
+# Test 2 :  Réseau fonctionne
+echo "Test 2: Vérification réseau..." | tee -a $LOGFILE
+if ping -c 1 8.8.8.8 &>/dev/null; then
+    echo "✓ PASS" | tee -a $LOGFILE
+else
+    echo "✗ FAIL" | tee -a $LOGFILE
+fi
+
+# Test 3 : Services critiques actifs
+echo "Test 3: Vérification services..." | tee -a $LOGFILE
+SERVICES=("NetworkManager" "sshd")
+for service in "${SERVICES[@]}"; do
+    if systemctl is-active --quiet $service; then
+        echo "  ✓ $service actif" | tee -a $LOGFILE
+    else
+        echo "  ✗ $service inactif" | tee -a $LOGFILE
+    fi
+done
+
+# Test 4 :  Applications présentes
+echo "Test 4: Vérification applications..." | tee -a $LOGFILE
+APPS=("vim" "git" "firefox")
+for app in "${APPS[@]}"; do
+    if command -v $app &>/dev/null; then
+        echo "  ✓ $app installé" | tee -a $LOGFILE
+    else
+        echo "  ✗ $app manquant" | tee -a $LOGFILE
+    fi
+done
+
+# Test 5 :  Espace disque
+echo "Test 5: Vérification espace disque..." | tee -a $LOGFILE
+USAGE=$(df / | tail -1 | awk '{print $5}' | sed 's/%//')
+if [ $USAGE -lt 80 ]; then
+    echo "  ✓ Espace suffisant ($USAGE%)" | tee -a $LOGFILE
+else
+    echo "  ✗ Espace insuffisant ($USAGE%)" | tee -a $LOGFILE
+fi
+
+echo "=== Tests terminés ===" | tee -a $LOGFILE
+echo "Rapport :  $LOGFILE"
+```
+
+---
+
+## Déploiement
+
+### Création d'images de déploiement
+
+#### Clonage de disque
+
+```bash
+# Cloner un disque vers une image
+sudo dd if=/dev/sda of=/path/to/disk-image.img bs=4M status=progress
+
+# Compresser l'image
+gzip /path/to/disk-image. img
+
+# Restaurer l'image
+gunzip -c disk-image.img. gz | sudo dd of=/dev/sda bs=4M status=progress
+```
+
+#### Création d'image avec Clonezilla
+
+```bash
+# Télécharger Clonezilla
+wget https://sourceforge.net/projects/clonezilla/files/clonezilla_live_stable/clonezilla-live-3.1.0-22-amd64.iso
+
+# Créer une clé USB bootable
+sudo dd if=clonezilla-live-3.1.0-22-amd64.iso of=/dev/sdb bs=4M status=progress
+
+# Démarrer sur Clonezilla et suivre l'assistant
+```
+
+### Déploiement réseau (PXE)
+
+#### Configuration serveur PXE
+
+```bash
+# Installer les services nécessaires
+sudo apt install dnsmasq nfs-kernel-server
+
+# Configuration dnsmasq
+sudo vim /etc/dnsmasq. conf
+
+# Contenu :  
+interface=eth0
+dhcp-range=192.168.1.100,192.168.1.200,12h
+dhcp-boot=pxelinux.0
+enable-tftp
+tftp-root=/srv/tftp
+
+# Créer le répertoire TFTP
+sudo mkdir -p /srv/tftp
+sudo chmod 777 /srv/tftp
+
+# Copier les fichiers de boot
+sudo apt install pxelinux syslinux-common
+sudo cp /usr/lib/PXELINUX/pxelinux.0 /srv/tftp/
+sudo cp /usr/lib/syslinux/modules/bios/*. c32 /srv/tftp/
+
+# Extraire le système de l'ISO
+sudo mkdir /mnt/iso
+sudo mount -o loop live-image-amd64.hybrid.iso /mnt/iso
+sudo cp -r /mnt/iso/live /srv/tftp/
+
+# Configuration du menu PXE
+sudo mkdir /srv/tftp/pxelinux.cfg
+sudo vim /srv/tftp/pxelinux.cfg/default
+
+# Contenu :  
+DEFAULT live
+LABEL live
+    KERNEL live/vmlinuz
+    APPEND initrd=live/initrd.img boot=live components netboot=nfs nfsroot=192.168.1.1:/srv/nfs
+
+# Configurer NFS
+sudo mkdir /srv/nfs
+sudo cp -r /mnt/iso/* /srv/nfs/
+sudo vim /etc/exports
+
+# Ajouter :   
+/srv/nfs *(ro,sync,no_root_squash,no_subtree_check)
+
+# Appliquer
+sudo exportfs -a
+
+# Démarrer les services
+sudo systemctl restart dnsmasq
+sudo systemctl restart nfs-kernel-server
+```
+
+### Déploiement cloud
+
+#### Création d'image cloud (AWS, OpenStack, etc.)
+
+```bash
+# Installer cloud-utils
+sudo apt install cloud-utils
+
+# Créer une image RAW
+qemu-img create -f raw cloud-image.raw 10G
+
+# Convertir en format cloud
+qemu-img convert -f raw -O qcow2 cloud-image.raw cloud-image.qcow2
+
+# Pour AWS :  convertir en format AMI
+# Utiliser AWS CLI ou console
+```
+
+### Distribution de l'ISO
+
+#### Hébergement
+
+```bash
+# Calculer les checksums
+md5sum live-image-amd64.hybrid.iso > MD5SUMS
+sha256sum live-image-amd64.hybrid.iso > SHA256SUMS
+
+# Signer avec GPG
+gpg --detach-sign --armor live-image-amd64.hybrid.iso
+```
+
+#### Torrent
+
+```bash
+# Installer mktorrent
+sudo apt install mktorrent
+
+# Créer un torrent
+mktorrent -a udp://tracker.example.com:6969 -o ma-distro.torrent live-image-amd64.hybrid.iso
+```
+
+---
+
+## Documentation des tests
+
+### Rapport de tests
+
+```markdown
+# Rapport de tests - Ma Distribution v1.0
+
+## Date : 2025-12-18
+
+### Environnement de test
+- CPU :   Intel Core i7-10700K
+- RAM :  16 GB DDR4
+- GPU :  NVIDIA GTX 1660
+- Disque : Samsung 970 EVO 500GB (NVMe SSD)
+
+### Résultats
+
+#### Tests fonctionnels
+- [x] Boot BIOS :  ✓ PASS
+- [x] Boot UEFI : ✓ PASS
+- [x] Installation : ✓ PASS
+- [x] Réseau : ✓ PASS
+- [x] Audio : ✓ PASS
+- [x] Graphique :  ✓ PASS
+
+#### Tests de performance
+- Temps de boot : 8.5s
+- Utilisation RAM (idle) :  850 MB
+- Benchmark CPU : Score 4250
+
+#### Tests de sécurité
+- Lynis score : 78/100
+- Ports ouverts : 22 (SSH uniquement)
+- Firewall :   Actif
+
+### Problèmes identifiés
+- WiFi : Driver rtl8821ce nécessite installation manuelle
+- Suspend :  Fonctionne mais réveil lent (3-4s)
+
+### Recommandations
+- Inclure firmware WiFi propriétaires
+- Optimiser le processus de réveil
+```
+
+---
+
+## Navigation
+
+⬅️ Précédent : [Personnalisation avancée](05-personnalisation. md)  
+➡️ Suivant : [Conclusion](07-conclusion.md)
