@@ -1,0 +1,834 @@
+# Personnalisation avancée
+
+## Vue d'ensemble
+
+La personnalisation permet d'adapter votre distribution à des besoins spécifiques.  Ce chapitre couvre : 
+
+- Personnalisation du noyau Linux
+- Configuration de l'environnement de bureau
+- Création de thèmes et branding
+- Optimisation des performances
+- Sécurisation du système
+- Scripts d'automatisation
+
+---
+
+## Compilation et personnalisation du noyau
+
+### Pourquoi compiler son propre noyau ? 
+
+**Avantages :**
+- ✅ Optimisation pour votre matériel spécifique
+- ✅ Réduction de la taille (retirer les drivers inutiles)
+- ✅ Activer des fonctionnalités expérimentales
+- ✅ Patchs personnalisés (performance, sécurité)
+- ✅ Apprentissage approfondi
+
+**Inconvénients :**
+- ❌ Temps de compilation (30 min - 2h)
+- ❌ Risque de système non bootable si mal configuré
+- ❌ Maintenance manuelle des mises à jour
+
+### Téléchargement des sources
+
+```bash
+# Créer un répertoire de travail
+mkdir -p ~/kernel-build
+cd ~/kernel-build
+
+# Télécharger le kernel (choisir la version LTS)
+wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.6.10.tar.xz
+
+# Vérifier l'intégrité (optionnel mais recommandé)
+wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.6.10.tar.sign
+gpg --verify linux-6.6.10.tar.sign linux-6.6.10.tar.xz
+
+# Extraire
+tar xf linux-6.6.10.tar. xz
+cd linux-6.6.10
+```
+
+### Configuration du noyau
+
+#### Méthode 1 : Partir de la config actuelle
+
+```bash
+# Copier la configuration actuelle
+cp /boot/config-$(uname -r) .config
+
+# Mettre à jour pour la nouvelle version
+make olddefconfig
+```
+
+#### Méthode 2 : Configuration par défaut
+
+```bash
+# Configuration par défaut pour votre architecture
+make defconfig
+
+# Configuration minimale
+make tinyconfig
+```
+
+#### Méthode 3 : Configuration interactive (recommandé)
+
+```bash
+# Interface ncurses (terminal)
+make menuconfig
+
+# Interface graphique Qt (plus conviviale)
+make xconfig
+
+# Interface graphique GTK
+make gconfig
+```
+
+### Options importantes dans menuconfig
+
+#### 1. Processeur
+
+```
+Processor type and features --->
+    [*] Symmetric multi-processing support
+    Processor family (Generic-x86-64)  --->
+        (X) Intel Core i7/Xeon
+    [*] Supported processor vendors --->
+        [*] Support Intel processors
+    [*] Multi-core scheduler support
+    Preemption Model (Voluntary Kernel Preemption)  --->
+    Timer frequency (1000 HZ)  --->
+```
+
+#### 2. Système de fichiers
+
+```
+File systems --->
+    <*> The Extended 4 (ext4) filesystem
+    <*> Btrfs filesystem
+    <*> F2FS filesystem
+    <*> XFS filesystem
+    DOS/FAT/NT Filesystems --->
+        <*> VFAT (Windows-95) fs support
+        <*> NTFS file system support
+    [*] Network File Systems --->
+        <*> NFS client support
+        <*> SMB3 and CIFS support
+```
+
+#### 3. Pilotes réseau
+
+```
+Device Drivers --->
+    [*] Network device support --->
+        [*] Ethernet driver support --->
+            [*] Intel devices
+            <*> Intel(R) PRO/1000 Gigabit Ethernet support
+            <*> Intel(R) 82575/82576 PCI-Express Gigabit Ethernet support
+        [*] Wireless LAN --->
+            <*> Intel devices
+            <*> Intel Wireless WiFi Next Gen AGN
+```
+
+#### 4. Support USB
+
+```
+Device Drivers --->
+    [*] USB support --->
+        <*> xHCI HCD (USB 3.0) support
+        <*> EHCI HCD (USB 2.0) support
+        <*> OHCI HCD (USB 1.1) support
+        <*> USB Mass Storage support
+```
+
+#### 5. Graphiques
+
+```
+Device Drivers --->
+    Graphics support --->
+        <*> Direct Rendering Manager --->
+            [*] Intel 8xx/9xx/G3x/G4x/HD Graphics
+            <*> AMD GPU
+            <*> Nouveau (NVIDIA) cards
+        Console display driver support --->
+            [*] Framebuffer Console support
+```
+
+### Compilation du noyau
+
+```bash
+# Nettoyer les compilations précédentes
+make clean
+make mrproper
+
+# Compiler (utiliser tous les cœurs CPU)
+make -j$(nproc)
+
+# Temps estimé :  30-120 minutes selon le CPU
+# Surveiller avec : 
+watch -n 5 'ps aux | grep make'
+
+# Compiler les modules
+make modules
+
+# Créer les packages Debian (recommandé)
+make -j$(nproc) bindeb-pkg
+
+# Les . deb seront dans le répertoire parent
+cd .. 
+ls -lh *.deb
+```
+
+### Installation du noyau
+
+#### Méthode 1 :  Avec les paquets Debian
+
+```bash
+# Installer les paquets générés
+sudo dpkg -i linux-image-6.6.10_*.deb
+sudo dpkg -i linux-headers-6.6.10_*.deb
+
+# Mettre à jour GRUB
+sudo update-grub
+
+# Redémarrer
+sudo reboot
+```
+
+#### Méthode 2 : Installation manuelle
+
+```bash
+cd linux-6.6.10
+
+# Installer les modules
+sudo make modules_install
+
+# Installer le noyau
+sudo make install
+
+# Copier le noyau et les fichiers
+sudo cp arch/x86/boot/bzImage /boot/vmlinuz-6.6.10-custom
+sudo cp System.map /boot/System.map-6.6.10-custom
+sudo cp .config /boot/config-6.6.10-custom
+
+# Créer l'initramfs
+sudo update-initramfs -c -k 6.6.10-custom
+
+# Mettre à jour GRUB
+sudo update-grub
+
+# Redémarrer
+sudo reboot
+```
+
+### Vérification
+
+```bash
+# Vérifier la version du noyau au démarrage
+uname -r
+
+# Voir les informations détaillées
+uname -a
+
+# Voir les modules chargés
+lsmod
+
+# Informations du noyau
+cat /proc/version
+```
+
+### Optimisations du noyau
+
+#### Patchs de performance
+
+```bash
+# Télécharger les patchs Liquorix (optimisé pour desktop)
+cd ~/kernel-build/linux-6.6.10
+wget https://liquorix.net/sources/6.6/liquorix-patches-6.6-10.patch
+patch -p1 < liquorix-patches-6.6-10.patch
+
+# Ou utiliser Zen kernel patches
+git clone https://github.com/zen-kernel/zen-kernel.git
+cd zen-kernel
+# Suivre les instructions
+```
+
+#### Paramètres de compilation pour optimisation
+
+```bash
+# Éditer le Makefile
+vim Makefile
+
+# Modifier la ligne CFLAGS pour votre CPU
+# Pour Intel Core i7 : 
+CFLAGS += -march=native -O2 -pipe
+
+# Pour AMD Ryzen : 
+CFLAGS += -march=znver3 -O2 -pipe
+```
+
+#### Paramètres sysctl pour performance
+
+```bash
+# Créer un fichier de configuration
+sudo vim /etc/sysctl. d/99-performance.conf
+
+# Contenu :  
+# Améliorer les performances réseau
+net.core.rmem_max = 16777216
+net.core.wmem_max = 16777216
+net.ipv4.tcp_rmem = 4096 87380 16777216
+net.ipv4.tcp_wmem = 4096 65536 16777216
+
+# Réduire le swappiness (préférer la RAM)
+vm.swappiness = 10
+
+# Améliorer les performances I/O
+vm.dirty_ratio = 15
+vm.dirty_background_ratio = 5
+
+# Appliquer
+sudo sysctl -p /etc/sysctl.d/99-performance.conf
+```
+
+---
+
+## Personnalisation de l'environnement de bureau
+
+### XFCE
+
+#### Thème et apparence
+
+```bash
+# Installer des thèmes
+sudo apt install arc-theme papirus-icon-theme
+
+# Appliquer via GUI :  
+# Settings → Appearance → Style → Arc-Dark
+# Settings → Icons → Papirus-Dark
+
+# Ou via CLI :  
+xfconf-query -c xsettings -p /Net/ThemeName -s "Arc-Dark"
+xfconf-query -c xsettings -p /Net/IconThemeName -s "Papirus-Dark"
+
+# Personnaliser les polices
+xfconf-query -c xsettings -p /Gtk/FontName -s "Noto Sans 10"
+```
+
+#### Fond d'écran personnalisé
+
+```bash
+# Copier le fond d'écran
+sudo cp /path/to/wallpaper.jpg /usr/share/backgrounds/
+
+# Définir via CLI
+xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s /usr/share/backgrounds/wallpaper.jpg
+
+# Créer un script de rotation de fond d'écran
+cat > ~/. config/rotate-wallpaper.sh << 'EOF'
+#!/bin/bash
+WALLPAPERS_DIR="/usr/share/backgrounds"
+RANDOM_WALLPAPER=$(find "$WALLPAPERS_DIR" -type f | shuf -n 1)
+xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s "$RANDOM_WALLPAPER"
+EOF
+
+chmod +x ~/.config/rotate-wallpaper.sh
+
+# Ajouter au cron (change toutes les heures)
+(crontab -l ; echo "0 * * * * ~/.config/rotate-wallpaper.sh") | crontab -
+```
+
+#### Panel personnalisé
+
+```bash
+# Configuration du panel
+xfconf-query -c xfce4-panel -p /panels/panel-1/size -s 32
+xfconf-query -c xfce4-panel -p /panels/panel-1/position -s "p=6;x=0;y=0"
+
+# Ajouter des plugins
+# Via GUI : Panel → Panel Preferences → Items → Add
+```
+
+### GNOME
+
+#### Extensions GNOME
+
+```bash
+# Installer gnome-shell-extensions
+sudo apt install gnome-shell-extensions gnome-tweaks
+
+# Extensions populaires :  
+# - Dash to Dock
+# - User Themes
+# - Clipboard Indicator
+# - Caffeine
+
+# Installer via navigateur :  
+# https://extensions.gnome.org
+```
+
+#### Thèmes GNOME
+
+```bash
+# Installer des thèmes
+sudo apt install gnome-themes-extra
+
+# Appliquer avec gnome-tweaks
+gnome-tweaks
+
+# Ou via CLI avec gsettings
+gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita-dark'
+gsettings set org.gnome.desktop.interface icon-theme 'Papirus-Dark'
+gsettings set org.gnome.desktop.wm.preferences theme 'Adwaita-dark'
+```
+
+### KDE Plasma
+
+```bash
+# Installer des thèmes globaux
+sudo apt install breeze breeze-cursor-theme
+
+# Thèmes communautaires via :  
+# System Settings → Appearance → Global Theme → Get New Global Themes
+
+# Widgets personnalisés :  
+# Right-click desktop → Add Widgets
+```
+
+---
+
+## Branding et identité visuelle
+
+### Logo et branding personnalisé
+
+#### Créer un logo système
+
+```bash
+# Installer ImageMagick pour manipulation d'images
+sudo apt install imagemagick
+
+# Créer différentes tailles
+convert logo.png -resize 128x128 logo-128.png
+convert logo.png -resize 64x64 logo-64.png
+convert logo.png -resize 32x32 logo-32.png
+
+# Copier dans les répertoires système
+sudo cp logo-*. png /usr/share/pixmaps/
+sudo cp logo. svg /usr/share/pixmaps/ma-distro-logo.svg
+```
+
+#### Modifier le logo GRUB
+
+```bash
+# Convertir l'image au format compatible GRUB
+convert logo.png -resize 640x480 -colors 256 logo. png
+convert logo.png logo.tga
+
+# Copier dans GRUB
+sudo cp logo.tga /boot/grub/
+
+# Éditer la config GRUB
+sudo vim /etc/default/grub
+
+# Ajouter :  
+GRUB_BACKGROUND=/boot/grub/logo.tga
+
+# Mettre à jour GRUB
+sudo update-grub
+```
+
+#### Écran de démarrage (Plymouth)
+
+```bash
+# Installer Plymouth
+sudo apt install plymouth plymouth-themes
+
+# Créer un thème personnalisé
+sudo mkdir -p /usr/share/plymouth/themes/ma-distro
+
+# Créer le fichier de description
+sudo vim /usr/share/plymouth/themes/ma-distro/ma-distro.plymouth
+
+# Contenu :  
+[Plymouth Theme]
+Name=Ma Distro
+Description=Thème personnalisé
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/ma-distro
+ScriptFile=/usr/share/plymouth/themes/ma-distro/ma-distro.script
+
+# Copier les images
+sudo cp logo.png /usr/share/plymouth/themes/ma-distro/
+
+# Installer le thème
+sudo plymouth-set-default-theme -R ma-distro
+```
+
+#### Écran de connexion (Login Manager)
+
+**LightDM (XFCE) :**
+
+```bash
+# Installer un greeter
+sudo apt install lightdm-gtk-greeter-settings
+
+# Éditer la configuration
+sudo vim /etc/lightdm/lightdm-gtk-greeter.conf
+
+# Contenu : 
+[greeter]
+background=/usr/share/backgrounds/login-background.jpg
+theme-name=Arc-Dark
+icon-theme-name=Papirus-Dark
+font-name=Noto Sans 11
+```
+
+**SDDM (KDE) :**
+
+```bash
+# Thème personnalisé
+sudo apt install sddm-theme-breeze
+
+# Configuration
+sudo vim /etc/sddm. conf
+
+[Theme]
+Current=breeze
+```
+
+**GDM (GNOME) :**
+
+```bash
+# Modifier le CSS de GDM
+sudo vim /usr/share/gnome-shell/theme/gdm3. css
+
+# Ou utiliser un script :  
+wget https://github.com/thiggy01/ubuntu-20.04-change-gdm-background/raw/master/ubuntu-20.04-change-gdm-background
+chmod +x ubuntu-20.04-change-gdm-background
+sudo ./ubuntu-20.04-change-gdm-background /path/to/background.jpg
+```
+
+### Personnalisation /etc/os-release
+
+```bash
+# Éditer les informations de la distribution
+sudo vim /etc/os-release
+
+# Contenu personnalisé :  
+NAME="Ma Distribution"
+VERSION="1.0 (Custom)"
+ID=ma-distro
+ID_LIKE=debian
+PRETTY_NAME="Ma Distribution 1.0"
+VERSION_ID="1.0"
+VERSION_CODENAME=custom
+HOME_URL="https://github.com/Fantamaini/linux-distro-personnalisee"
+SUPPORT_URL="https://github.com/Fantamaini/linux-distro-personnalisee/issues"
+BUG_REPORT_URL="https://github.com/Fantamaini/linux-distro-personnalisee/issues"
+LOGO=ma-distro-logo
+```
+
+### Message de bienvenue personnalisé
+
+```bash
+# MOTD (Message of the Day)
+sudo vim /etc/motd
+
+# Utiliser figlet pour un texte stylisé
+sudo apt install figlet
+figlet "Ma Distro" | sudo tee /etc/motd
+
+# Ou utiliser un script dynamique
+sudo vim /etc/update-motd.d/00-header
+
+#!/bin/bash
+echo " "
+echo "╔════════════════════════════════════════╗"
+echo "║   Bienvenue sur Ma Distribution Linux  ║"
+echo "║            Version 1.0                 ║"
+echo "╚════════════════════════════════════════╝"
+echo " "
+echo "Système d'exploitation : $(lsb_release -ds)"
+echo "Noyau :  $(uname -r)"
+echo "Uptime : $(uptime -p)"
+echo " "
+
+chmod +x /etc/update-motd.d/00-header
+```
+
+---
+
+## Optimisation des performances
+
+### Optimisation du démarrage
+
+#### Analyser le temps de boot
+
+```bash
+# Voir le temps de démarrage total
+systemd-analyze
+
+# Voir les services lents
+systemd-analyze blame
+
+# Graphique du temps de boot
+systemd-analyze plot > boot-analysis.svg
+```
+
+#### Désactiver les services inutiles
+
+```bash
+# Lister tous les services
+systemctl list-unit-files --type=service
+
+# Désactiver des services (exemples)
+sudo systemctl disable bluetooth. service
+sudo systemctl disable cups. service
+sudo systemctl disable avahi-daemon.service
+sudo systemctl disable ModemManager.service
+
+# Masquer un service (empêche son activation)
+sudo systemctl mask bluetooth.service
+```
+
+#### Optimiser GRUB
+
+```bash
+# Réduire le timeout GRUB
+sudo vim /etc/default/grub
+
+GRUB_TIMEOUT=2
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
+
+# Désactiver submenu
+GRUB_DISABLE_SUBMENU=y
+
+# Mettre à jour
+sudo update-grub
+```
+
+### Optimisation des performances I/O
+
+#### Choisir le bon ordonnanceur I/O
+
+```bash
+# Voir l'ordonnanceur actuel
+cat /sys/block/sda/queue/scheduler
+
+# Pour SSD : utiliser "none" ou "mq-deadline"
+echo none | sudo tee /sys/block/sda/queue/scheduler
+
+# Pour HDD : utiliser "bfq"
+echo bfq | sudo tee /sys/block/sda/queue/scheduler
+
+# Rendre permanent
+sudo vim /etc/udev/rules.d/60-scheduler.rules
+
+# Pour SSD : 
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="none"
+
+# Pour HDD : 
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="1", ATTR{queue/scheduler}="bfq"
+```
+
+#### Activer TRIM pour SSD
+
+```bash
+# Vérifier le support TRIM
+sudo hdparm -I /dev/sda | grep TRIM
+
+# Activer TRIM hebdomadaire
+sudo systemctl enable fstrim.timer
+sudo systemctl start fstrim.timer
+
+# Ou dans fstab (discard continu)
+# UUID=xxx  /  ext4  defaults,noatime,discard  0  1
+```
+
+#### Options de montage fstab
+
+```bash
+sudo vim /etc/fstab
+
+# Optimisations pour SSD
+UUID=xxx  /  ext4  defaults,noatime,nodiratime,discard,commit=60  0  1
+
+# Explications :  
+# noatime : ne pas mettre à jour le temps d'accès (réduit les écritures)
+# nodiratime : idem pour les répertoires
+# discard :  TRIM automatique
+# commit=60 : écrire sur disque toutes les 60 secondes au lieu de 5
+```
+
+### Optimisation de la mémoire
+
+#### Zram (compression RAM)
+
+```bash
+# Installer zram-tools
+sudo apt install zram-tools
+
+# Configuration
+sudo vim /etc/default/zramswap
+
+# Taille en pourcentage de RAM
+PERCENTAGE=50
+PRIORITY=100
+
+# Activer
+sudo systemctl enable zramswap
+sudo systemctl start zramswap
+
+# Vérifier
+swapon --show
+```
+
+#### Préchargement des applications
+
+```bash
+# Installer preload
+sudo apt install preload
+
+# Activer
+sudo systemctl enable preload
+sudo systemctl start preload
+
+# Preload analyse vos habitudes et précharge les applications fréquentes
+```
+
+---
+
+## Sécurisation avancée
+
+### Configuration du pare-feu
+
+#### UFW (avancé)
+
+```bash
+# Règles spécifiques
+sudo ufw allow from 192.168.1.0/24 to any port 22
+
+# Limiter les tentatives de connexion SSH
+sudo ufw limit ssh
+
+# Autoriser une application
+sudo ufw allow 'Apache Full'
+
+# Voir les applications disponibles
+sudo ufw app list
+
+# Journalisation
+sudo ufw logging on
+
+# Voir les règles numérotées
+sudo ufw status numbered
+
+# Supprimer une règle par numéro
+sudo ufw delete 2
+```
+
+### SELinux / AppArmor
+
+#### AppArmor (Debian/Ubuntu)
+
+```bash
+# Installer AppArmor
+sudo apt install apparmor apparmor-utils
+
+# Voir le statut
+sudo aa-status
+
+# Modes :  
+# - enforce : applique les règles
+# - complain : log seulement
+
+# Mettre un profil en mode complain
+sudo aa-complain /etc/apparmor.d/usr.bin.firefox
+
+# Mettre en mode enforce
+sudo aa-enforce /etc/apparmor.d/usr.bin.firefox
+
+# Désactiver un profil
+sudo ln -s /etc/apparmor.d/usr.bin.firefox /etc/apparmor. d/disable/
+sudo apparmor_parser -R /etc/apparmor. d/usr.bin.firefox
+```
+
+### Fail2ban
+
+```bash
+# Installer Fail2ban
+sudo apt install fail2ban
+
+# Configuration
+sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+sudo vim /etc/fail2ban/jail.local
+
+# Configuration SSH :  
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 3600
+findtime = 600
+
+# Redémarrer
+sudo systemctl restart fail2ban
+
+# Voir les bans
+sudo fail2ban-client status sshd
+```
+
+### Audit système
+
+```bash
+# Installer auditd
+sudo apt install auditd
+
+# Voir les logs
+sudo ausearch -m avc -ts recent
+
+# Surveiller un fichier
+sudo auditctl -w /etc/passwd -p wa -k passwd_changes
+
+# Voir les règles
+sudo auditctl -l
+```
+
+---
+
+## Scripts d'automatisation
+
+### Script de post-installation
+
+```bash
+#!/bin/bash
+
+echo "=== Post-installation Ma Distribution ==="
+
+# Mise à jour
+apt update && apt upgrade -y
+
+# Installation paquets essentiels
+apt install -y vim git htop curl wget
+
+# Configuration firewall
+ufw enable
+ufw default deny incoming
+ufw allow ssh
+
+# Configuration SSH
+sed -i 's/#PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
+systemctl restart sshd
+
+echo "=== Post-installation terminée !  ==="
+```
+
+---
+
+## Navigation
+
+⬅️ Précédent : [Installation et configuration](04-installation-configuration.md)  
+➡️ Suivant : [Tests et déploiement](06-tests-deploiement.md)
